@@ -17,16 +17,21 @@
       font-family: 'Segoe UI', Arial, sans-serif;
       color: #fff;
       user-select: none;
+      padding: 12px;
     }
 
     #game-wrapper {
       display: flex;
       flex-direction: column;
       align-items: center;
+      width: 100%;
+      max-width: 480px;
     }
 
     #gameCanvas {
       display: block;
+      width: 100%;
+      height: auto;
       border: 2px solid #4a90d9;
       border-bottom: none;
       border-radius: 12px 12px 0 0;
@@ -36,7 +41,7 @@
 
     /* ── キャラクターパネル ── */
     #char-panel {
-      width: 480px;
+      width: 100%;
       background: #0d1b3e;
       border: 2px solid #4a90d9;
       border-radius: 0 0 12px 12px;
@@ -45,6 +50,7 @@
       align-items: center;
       gap: 16px;
       box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+      box-sizing: border-box;
     }
 
     #char-face {
@@ -261,15 +267,19 @@
   });
   document.addEventListener('keyup', e => { keys[e.code] = false; });
 
+  function toLogicalX(clientX) {
+    const rect  = canvas.getBoundingClientRect();
+    const scale = W / rect.width;
+    return (clientX - rect.left) * scale;
+  }
+
   canvas.addEventListener('mousemove', e => {
-    const rect = canvas.getBoundingClientRect();
-    targetPX = (e.clientX - rect.left) - PADDLE_W / 2;
+    targetPX = toLogicalX(e.clientX) - PADDLE_W / 2;
   });
 
   canvas.addEventListener('touchmove', e => {
     e.preventDefault();
-    const rect  = canvas.getBoundingClientRect();
-    targetPX = (e.touches[0].clientX - rect.left) - PADDLE_W / 2;
+    targetPX = toLogicalX(e.touches[0].clientX) - PADDLE_W / 2;
   }, { passive: false });
 
   canvas.addEventListener('click', () => {
