@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>👸 脱出！ブロック崩し</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: radial-gradient(ellipse at center, #1a1a3e 0%, #060612 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      color: #fff;
+      user-select: none;
+    }
+
+    #game-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #gameCanvas {
+      display: block;
+      border: 2px solid #4a90d9;
+      border-bottom: none;
+      border-radius: 12px 12px 0 0;
+      box-shadow: 0 0 40px rgba(74, 144, 217, 0.4);
+      cursor: none;
+    }
+
+    /* ── キャラクターパネル ── */
+    #char-panel {
+      width: 480px;
+      background: #0d1b3e;
+      border: 2px solid #4a90d9;
+      border-radius: 0 0 12px 12px;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+    }
+
+    #char-face {
+      font-size: 46px;
+      line-height: 1;
+      min-width: 54px;
+      text-align: center;
+      transition: transform 0.15s;
+    }
+    #char-face.pop { transform: scale(1.5); }
+
+    #char-info { flex: 1; }
+
+    #char-message {
+      font-size: 13px;
+      color: #99aacc;
+      margin-bottom: 7px;
+      min-height: 18px;
+    }
+
+    #bar-wrap {
+      background: #1a1a3e;
+      border-radius: 10px;
+      height: 14px;
+      overflow: hidden;
+      border: 1px solid #2a3a6a;
+    }
+
+    #escape-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #f39c12, #e74c3c);
+      border-radius: 10px;
+      transition: width 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+
+    #key-count {
+      font-size: 18px;
+      font-weight: bold;
+      color: #f39c12;
+      min-width: 72px;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    /* ── オーバーレイ ── */
+    #overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.78);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+    #overlay.show { display: flex; }
+
+    .ov-box {
+      background: linear-gradient(135deg, #0d1b3e 0%, #1a2a5e 100%);
+      border: 3px solid #4a90d9;
+      border-radius: 22px;
+      padding: 44px 54px;
+      text-align: center;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.6),
+                  0 0 40px rgba(74,144,217,0.25);
+      animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes popIn {
+      from { transform: scale(0.4); opacity: 0; }
+      to   { transform: scale(1);   opacity: 1; }
+    }
+
+    #ov-emoji { font-size: 68px; display: block; margin-bottom: 10px; }
+    #ov-title { font-size: 38px; font-weight: bold; margin-bottom: 8px; }
+    #ov-sub   { font-size: 15px; color: #8899bb; margin-bottom: 16px; }
+
+    #ov-score {
+      background: rgba(255,255,255,0.06);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 24px;
+      font-size: 15px;
+      color: #f39c12;
+      white-space: pre-line;
+      line-height: 1.8;
+    }
+
+    #ov-btn {
+      background: linear-gradient(135deg, #4a90d9, #1565c0);
+      color: #fff;
+      border: none;
+      padding: 14px 36px;
+      font-size: 18px;
+      border-radius: 50px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    #ov-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 24px rgba(74,144,217,0.5);
+    }
+    #ov-btn:active { transform: translateY(0); }
+
+    #ov-hs {
+      margin-top: 14px;
+      font-size: 13px;
+      color: #556;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-wrapper">
+    <canvas id="gameCanvas" width="480" height="580"></canvas>
+    <div id="char-panel">
+      <div id="char-face">🔒</div>
+      <div id="char-info">
+        <div id="char-message">鍵ブロック（🔑）を全部壊して脱出させよう！</div>
+        <div id="bar-wrap"><div id="escape-bar"></div></div>
+      </div>
+      <div id="key-count">0 / ? 🔑</div>
+    </div>
+  </div>
+
+  <!-- ステージクリア / ゲームオーバーオーバーレイ -->
+  <div id="overlay">
+    <div class="ov-box">
+      <span id="ov-emoji">👸</span>
+      <div id="ov-title">クリア！</div>
+      <div id="ov-sub"></div>
+      <div id="ov-score"></div>
+      <button id="ov-btn" onclick="onOverlayBtn()">次へ</button>
+      <div id="ov-hs"></div>
+    </div>
+  </div>
+
+  <script>
+  // ════════════════════════════════════════════════
+  //  セットアップ
+  // ════════════════════════════════════════════════
+  const canvas = document.getElementById('gameCanvas');
+  const ctx    = canvas.getContext('2d');
+  const W = canvas.width;   // 480
+  const H = canvas.height;  // 580
+
+  // roundRect ポリフィル（古いブラウザ対策）
+  if (!CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+      r = r || 0;
+      this.moveTo(x + r, y);
+      this.lineTo(x + w - r, y);
+      this.quadraticCurveTo(x + w, y, x + w, y + r);
+      this.lineTo(x + w, y + h - r);
+      this.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      this.lineTo(x + r, y + h);
+      this.quadraticCurveTo(x, y + h, x, y + h - r);
+      this.lineTo(x, y + r);
+      this.quadraticCurveTo(x, y, x + r, y);
+      this.closePath();
+    };
+  }
+
+  // ════════════════════════════════════════════════
+  //  定数
+  // ════════════════════════════════════════════════
+  const HUD_H     = 56;
+  const BLOCK_COLS = 5;
+  const BLOCK_W   = 82;
+  const BLOCK_H   = 24;
+  const BLOCK_GX  = 6;   // 横のすきま
+  const BLOCK_GY  = 6;   // 縦のすきま
+  const BLOCK_OY  = HUD_H + 8; // ブロック開始Y
+  const PADDLE_W  = 100;
+  const PADDLE_H  = 14;
+  const PADDLE_Y  = H - 42;
+  const BALL_R    = 8;
+  const HS_KEY    = 'datsutsu_hs';
+
+  // ステージ設定
+  const STAGES = [
+    { keyCount: 3,  normalCount: 12, rows: 3, timeLimit: 60, baseSpeed: 4.0 },
+    { keyCount: 5,  normalCount: 20, rows: 5, timeLimit: 50, baseSpeed: 4.5 },
+    { keyCount: 7,  normalCount: 28, rows: 7, timeLimit: 40, baseSpeed: 5.0 },
+  ];
+
+  // ════════════════════════════════════════════════
+  //  ゲーム状態
+  // ════════════════════════════════════════════════
+  let gState     = 'menu'; // menu | playing | gameOver | stageClear | complete
+  let stageIdx   = 0;
+  let totalScore = 0;
+  let timeLeft   = 60;
+  let timeFrac   = 0;
+
+  let ball      = { x: 0, y: 0, vx: 0, vy: 0 };
+  let paddleX   = (W - PADDLE_W) / 2;
+  let targetPX  = paddleX;
+  let blocks    = [];
+  let keysBroken = 0;
+  let totalKeys  = 0;
+  let particles  = [];
+
+  // ════════════════════════════════════════════════
+  //  入力
+  // ════════════════════════════════════════════════
+  const keys = {};
+  document.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    if (e.code === 'Space' && gState === 'menu') startGame();
+  });
+  document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+  canvas.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    targetPX = (e.clientX - rect.left) - PADDLE_W / 2;
+  });
+
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    const rect  = canvas.getBoundingClientRect();
+    targetPX = (e.touches[0].clientX - rect.left) - PADDLE_W / 2;
+  }, { passive: false });
+
+  canvas.addEventListener('click', () => {
+    if (gState === 'menu') startGame();
+  });
+
+  // ════════════════════════════════════════════════
+  //  初期化
+  // ════════════════════════════════════════════════
+  function startGame() {
+    totalScore = 0;
+    stageIdx   = 0;
+    initStage();
+  }
+
+  function initStage() {
+    const cfg    = STAGES[stageIdx];
+    timeLeft     = cfg.timeLimit;
+    timeFrac     = 0;
+    keysBroken   = 0;
+    totalKeys    = cfg.keyCount;
+    particles    = [];
+
+    paddleX = targetPX = (W - PADDLE_W) / 2;
+    resetBall();
+    generateBlocks(cfg);
+    updateCharPanel();
+    gState = 'playing';
+  }
+
+  function resetBall() {
+    const cfg   = STAGES[stageIdx];
+    // 上方向ランダム角度 (±20°)
+    const angle = -Math.PI / 2 + (Math.random() * 0.7 - 0.35);
+    ball = {
+      x:  W / 2,
+      y:  PADDLE_Y - 30,
+      vx: Math.cos(angle) * cfg.baseSpeed,
+      vy: Math.sin(angle) * cfg.baseSpeed,
+    };
+  }
+
+  function generateBlocks(cfg) {
+    blocks = [];
+    const total = cfg.keyCount + cfg.normalCount;
+    const types = [
+      ...Array(cfg.keyCount).fill('key'),
+      ...Array(cfg.normalCount).fill('normal'),
+    ];
+    // Fisher-Yates シャッフル
+    for (let i = types.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [types[i], types[j]] = [types[j], types[i]];
+    }
+
+    const totalW = BLOCK_COLS * BLOCK_W + (BLOCK_COLS - 1) * BLOCK_GX;
+    const startX = (W - totalW) / 2;
+
+    for (let r = 0; r < cfg.rows; r++) {
+      for (let c = 0; c < BLOCK_COLS; c++) {
+        const idx = r * BLOCK_COLS + c;
+        if (idx >= total) break;
+        blocks.push({
+          x:    startX + c * (BLOCK_W + BLOCK_GX),
+          y:    BLOCK_OY + r * (BLOCK_H + BLOCK_GY),
+          type: types[idx],
+          alive: true,
+        });
+      }
+    }
+  }
+
+  // ════════════════════════════════════════════════
+  //  更新
+  // ════════════════════════════════════════════════
+  function update(dt) {
+    if (gState !== 'playing') return;
+
+    // キーボード操作
+    if (keys['ArrowLeft'])  targetPX -= 400 * dt;
+    if (keys['ArrowRight']) targetPX += 400 * dt;
+
+    // パドルをなめらかに追従
+    paddleX += (targetPX - paddleX) * Math.min(dt * 16, 1);
+    paddleX  = clamp(paddleX, 0, W - PADDLE_W);
+
+    // タイマー
+    timeFrac += dt;
+    if (timeFrac >= 1) {
+      timeFrac -= 1;
+      timeLeft  = Math.max(0, timeLeft - 1);
+    }
+    if (timeLeft <= 0) { doGameOver('timeout'); return; }
+
+    // ボール速度（時間経過でスピードアップ: 10秒ごと +8%）
+    const cfg       = STAGES[stageIdx];
+    const elapsed   = cfg.timeLimit - timeLeft;
+    const speedMult = 1 + elapsed * 0.008;
+    const speed     = cfg.baseSpeed * speedMult;
+
+    const curSpd = Math.hypot(ball.vx, ball.vy);
+    if (curSpd > 0) {
+      ball.vx = (ball.vx / curSpd) * speed;
+      ball.vy = (ball.vy / curSpd) * speed;
+    }
+
+    // ボール移動
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+
+    // 壁との衝突
+    if (ball.x - BALL_R < 0)  { ball.x = BALL_R;      ball.vx =  Math.abs(ball.vx); }
+    if (ball.x + BALL_R > W)  { ball.x = W - BALL_R;  ball.vx = -Math.abs(ball.vx); }
+    if (ball.y - BALL_R < HUD_H) { ball.y = HUD_H + BALL_R; ball.vy = Math.abs(ball.vy); }
+
+    // 画面外（落下） → ゲームオーバー
+    if (ball.y - BALL_R > H) { doGameOver('fall'); return; }
+
+    // パドルとの衝突
+    if (
+      ball.vy > 0 &&
+      ball.y + BALL_R >= PADDLE_Y &&
+      ball.y - BALL_R <= PADDLE_Y + PADDLE_H &&
+      ball.x >= paddleX - 4 &&
+      ball.x <= paddleX + PADDLE_W + 4
+    ) {
+      ball.y = PADDLE_Y - BALL_R;
+      // ヒット位置で反射角を制御
+      const rel    = clamp((ball.x - paddleX) / PADDLE_W, 0, 1);
+      const bAngle = (rel - 0.5) * Math.PI * 0.75; // ±67.5°
+      ball.vx = Math.sin(bAngle) * speed;
+      ball.vy = -Math.abs(Math.cos(bAngle) * speed);
+      // 真横に飛ばない最低保証
+      if (Math.abs(ball.vy) < speed * 0.25) {
+        ball.vy = -speed * 0.25;
+        ball.vx = Math.sign(ball.vx) * Math.sqrt(speed * speed - ball.vy * ball.vy);
+      }
+    }
+
+    // ブロックとの衝突（1フレームに1ブロック）
+    for (const b of blocks) {
+      if (!b.alive) continue;
+      const bR = b.x + BLOCK_W, bB = b.y + BLOCK_H;
+      if (ball.x + BALL_R < b.x || ball.x - BALL_R > bR ||
+          ball.y + BALL_R < b.y || ball.y - BALL_R > bB) continue;
+
+      // どの面に当たったかを最小オーバーラップで判定
+      const oL = (ball.x + BALL_R) - b.x;
+      const oR = bR - (ball.x - BALL_R);
+      const oT = (ball.y + BALL_R) - b.y;
+      const oB = bB - (ball.y - BALL_R);
+      const m  = Math.min(oL, oR, oT, oB);
+
+      if      (m === oL) { ball.x = b.x - BALL_R;  ball.vx = -Math.abs(ball.vx); }
+      else if (m === oR) { ball.x = bR + BALL_R;   ball.vx =  Math.abs(ball.vx); }
+      else if (m === oT) { ball.y = b.y - BALL_R;  ball.vy = -Math.abs(ball.vy); }
+      else               { ball.y = bB + BALL_R;   ball.vy =  Math.abs(ball.vy); }
+
+      b.alive = false;
+      spawnParticles(b.x + BLOCK_W / 2, b.y + BLOCK_H / 2, b.type);
+
+      if (b.type === 'key') {
+        keysBroken++;
+        updateCharPanel();
+        if (keysBroken >= totalKeys) { doStageClear(); return; }
+      }
+      break;
+    }
+
+    // パーティクル更新
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x  += p.vx;
+      p.y  += p.vy;
+      p.vy += 0.18;
+      p.life -= dt * 2;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+  }
+
+  // ════════════════════════════════════════════════
+  //  パーティクル
+  // ════════════════════════════════════════════════
+  function spawnParticles(cx, cy, type) {
+    const color = type === 'key' ? '#f5c842' : '#4a90d9';
+    for (let i = 0; i < 10; i++) {
+      const a = (Math.PI * 2 / 10) * i + Math.random() * 0.5;
+      const s = 2 + Math.random() * 3.5;
+      particles.push({
+        x: cx, y: cy,
+        vx: Math.cos(a) * s,
+        vy: Math.sin(a) * s,
+        color,
+        life: 1,
+        size: 3 + Math.random() * 3,
+      });
+    }
+  }
+
+  // ════════════════════════════════════════════════
+  //  ゲームイベント
+  // ════════════════════════════════════════════════
+  function doGameOver(reason) {
+    gState = 'gameOver';
+    const isTimeout = reason === 'timeout';
+    showOverlay({
+      emoji:      isTimeout ? '😢' : '😱',
+      title:      isTimeout ? 'フワァ〜😢' : 'マンマミーア！',
+      titleColor: '#e74c3c',
+      sub:        isTimeout ? '時間切れ...間に合わなかった！' : 'ボールを落としてしまった！',
+      scoreText:  `スコア: ${totalScore.toLocaleString()} pt`,
+      btnText:    'もう一度チャレンジ',
+      onBtn: () => {
+        totalScore = 0;
+        stageIdx   = 0;
+        initStage();
+      },
+    });
+  }
+
+  function doStageClear() {
+    const isLast     = stageIdx >= STAGES.length - 1;
+    const stageScore = Math.floor(timeLeft * 100 * (stageIdx + 1));
+    totalScore      += stageScore;
+    gState           = isLast ? 'complete' : 'stageClear';
+
+    if (isLast) {
+      const prevHS = parseInt(localStorage.getItem(HS_KEY) || '0');
+      const isNew  = totalScore > prevHS;
+      if (isNew) localStorage.setItem(HS_KEY, totalScore);
+      showOverlay({
+        emoji:      '🎉',
+        title:      'ヤッフー！',
+        titleColor: '#f39c12',
+        sub:        '全ステージクリア！完全脱出成功！👸✨',
+        scoreText:  `最終スコア: ${totalScore.toLocaleString()} pt\n${isNew ? '🏆 NEW ハイスコア！' : `ハイスコア: ${Math.max(prevHS, totalScore).toLocaleString()} pt`}`,
+        btnText:    'もう一度遊ぶ',
+        onBtn: () => { totalScore = 0; stageIdx = 0; gState = 'menu'; },
+      });
+    } else {
+      showOverlay({
+        emoji:      '🏃‍♀️',
+        title:      'ヤッフー！',
+        titleColor: '#2ecc71',
+        sub:        `ステージ ${stageIdx + 1} クリア！`,
+        scoreText:  `ステージスコア: +${stageScore.toLocaleString()} pt\n合計: ${totalScore.toLocaleString()} pt`,
+        btnText:    `ステージ ${stageIdx + 2} へ ▶`,
+        onBtn: () => { stageIdx++; initStage(); },
+      });
+    }
+  }
+
+  // ════════════════════════════════════════════════
+  //  オーバーレイ
+  // ════════════════════════════════════════════════
+  let pendingAction = null;
+
+  function showOverlay({ emoji, title, titleColor, sub, scoreText, btnText, onBtn }) {
+    document.getElementById('ov-emoji').textContent = emoji;
+    const titleEl = document.getElementById('ov-title');
+    titleEl.textContent  = title;
+    titleEl.style.color  = titleColor;
+    document.getElementById('ov-sub').textContent   = sub;
+    document.getElementById('ov-score').textContent = scoreText;
+    document.getElementById('ov-btn').textContent   = btnText;
+
+    const hs = parseInt(localStorage.getItem(HS_KEY) || '0');
+    document.getElementById('ov-hs').textContent = hs > 0 ? `歴代ハイスコア: ${hs.toLocaleString()} pt` : '';
+
+    pendingAction = onBtn;
+    document.getElementById('overlay').classList.add('show');
+  }
+
+  function onOverlayBtn() {
+    document.getElementById('overlay').classList.remove('show');
+    if (pendingAction) { const fn = pendingAction; pendingAction = null; fn(); }
+  }
+
+  // ════════════════════════════════════════════════
+  //  キャラパネル更新
+  // ════════════════════════════════════════════════
+  function updateCharPanel() {
+    const pct = totalKeys > 0 ? keysBroken / totalKeys : 0;
+
+    document.getElementById('escape-bar').style.width = (pct * 100) + '%';
+    document.getElementById('key-count').textContent  = `${keysBroken} / ${totalKeys} 🔑`;
+
+    const face = document.getElementById('char-face');
+    const msg  = document.getElementById('char-message');
+
+    // ポップアニメ
+    face.classList.remove('pop');
+    void face.offsetWidth;
+    face.classList.add('pop');
+    setTimeout(() => face.classList.remove('pop'), 300);
+
+    if (pct === 0) {
+      face.textContent = '🔒';
+      msg.textContent  = '鍵ブロック（🔑）を全部壊して脱出させよう！';
+    } else if (pct < 0.34) {
+      face.textContent = '😰';
+      msg.textContent  = 'たすけてー！！鍵を壊して！';
+    } else if (pct < 0.67) {
+      face.textContent = '😤';
+      msg.textContent  = 'もうすぐ脱出できる...！頑張って！';
+    } else if (pct < 1) {
+      face.textContent = '🏃‍♀️';
+      msg.textContent  = 'あと少し！！急いで！！';
+    } else {
+      face.textContent = '🎉';
+      msg.textContent  = 'やったー！脱出成功！！';
+    }
+  }
+
+  // ════════════════════════════════════════════════
+  //  描画
+  // ════════════════════════════════════════════════
+  function render() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#080814';
+    ctx.fillRect(0, 0, W, H);
+
+    if (gState === 'menu') { renderMenu(); return; }
+
+    renderHUD();
+    renderBlocks();
+    renderParticles();
+    renderPaddle();
+    renderBall();
+  }
+
+  // ── メニュー ──
+  function renderMenu() {
+    // 星
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    for (let i = 0; i < 70; i++) {
+      const x = (i * 71 + 13) % W;
+      const y = (i * 101 + 31) % H;
+      const r = i % 4 === 0 ? 1.5 : 0.7;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    }
+
+    ctx.textAlign = 'center';
+
+    // タイトル
+    ctx.font      = 'bold 36px Arial';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('👸 脱出！ブロック崩し', W / 2, H / 2 - 100);
+
+    ctx.font      = '16px Arial';
+    ctx.fillStyle = '#7fa8d9';
+    ctx.fillText('鍵ブロックを全部壊して姫を救え！', W / 2, H / 2 - 55);
+
+    ctx.font      = '13px Arial';
+    ctx.fillStyle = '#556';
+    ctx.fillText('全3ステージ ・ タイムボーナス ・ ハイスコア記録', W / 2, H / 2 - 25);
+
+    // スタートボタン（点滅）
+    const pulse = 0.65 + 0.35 * Math.sin(Date.now() / 380);
+    ctx.globalAlpha = pulse;
+    ctx.font        = 'bold 22px Arial';
+    ctx.fillStyle   = '#4a90d9';
+    ctx.fillText('クリック ／ スペースキー でスタート', W / 2, H / 2 + 40);
+    ctx.globalAlpha = 1;
+
+    // 操作説明
+    ctx.font      = '13px Arial';
+    ctx.fillStyle = '#445';
+    ctx.fillText('マウス ／ ←→ キーでパドル操作', W / 2, H / 2 + 80);
+
+    // ハイスコア
+    const hs = parseInt(localStorage.getItem(HS_KEY) || '0');
+    if (hs > 0) {
+      ctx.font      = 'bold 16px Arial';
+      ctx.fillStyle = '#f39c12';
+      ctx.fillText(`🏆 最高スコア: ${hs.toLocaleString()} pt`, W / 2, H / 2 + 120);
+    }
+  }
+
+  // ── HUD ──
+  function renderHUD() {
+    ctx.fillStyle = '#0d1b3e';
+    ctx.fillRect(0, 0, W, HUD_H);
+
+    ctx.strokeStyle = '#2a4a8a';
+    ctx.lineWidth   = 1;
+    ctx.beginPath(); ctx.moveTo(0, HUD_H); ctx.lineTo(W, HUD_H); ctx.stroke();
+
+    // ステージ
+    ctx.textAlign = 'left';
+    ctx.font      = 'bold 11px Arial';
+    ctx.fillStyle = '#4a90d9';
+    ctx.fillText('STAGE', 15, 22);
+    ctx.font      = 'bold 30px Arial';
+    ctx.fillStyle = '#fff';
+    ctx.fillText(stageIdx + 1, 15, 50);
+
+    // タイマー
+    const cfg     = STAGES[stageIdx];
+    const urgency = timeLeft / cfg.timeLimit;
+    ctx.fillStyle = urgency < 0.2 ? '#e74c3c' : urgency < 0.4 ? '#f39c12' : '#2ecc71';
+    ctx.textAlign = 'center';
+    ctx.font      = 'bold 11px Arial';
+    ctx.fillStyle = '#667';
+    ctx.fillText('TIME', W / 2, 20);
+    ctx.font      = 'bold 32px Arial';
+    ctx.fillStyle = urgency < 0.2 ? '#e74c3c' : urgency < 0.4 ? '#f39c12' : '#2ecc71';
+    ctx.fillText(timeLeft, W / 2, 50);
+
+    // スコア
+    ctx.textAlign = 'right';
+    ctx.font      = 'bold 11px Arial';
+    ctx.fillStyle = '#667';
+    ctx.fillText('SCORE', W - 14, 20);
+    ctx.font      = 'bold 22px Arial';
+    ctx.fillStyle = '#f39c12';
+    ctx.fillText(totalScore.toLocaleString(), W - 14, 50);
+
+    // スピード表示
+    const elapsed   = cfg.timeLimit - timeLeft;
+    const speedMult = 1 + elapsed * 0.008;
+    if (speedMult > 1.2) {
+      const alpha   = 0.55 + 0.45 * Math.sin(Date.now() / 180);
+      ctx.globalAlpha = alpha;
+      ctx.textAlign   = 'center';
+      ctx.font        = 'bold 11px Arial';
+      ctx.fillStyle   = '#e74c3c';
+      ctx.fillText(`🔥 SPEED ×${speedMult.toFixed(1)}`, W / 2, HUD_H - 5);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ── ブロック ──
+  function renderBlocks() {
+    for (const b of blocks) {
+      if (!b.alive) continue;
+      const isKey = b.type === 'key';
+
+      if (isKey) { ctx.shadowColor = '#f5c842'; ctx.shadowBlur = 14; }
+
+      // 塗り
+      const grad = ctx.createLinearGradient(b.x, b.y, b.x, b.y + BLOCK_H);
+      if (isKey) {
+        grad.addColorStop(0, '#f5d050');
+        grad.addColorStop(1, '#e07e10');
+      } else {
+        grad.addColorStop(0, '#2c3e7a');
+        grad.addColorStop(1, '#18254e');
+      }
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.roundRect(b.x, b.y, BLOCK_W, BLOCK_H, 5); ctx.fill();
+
+      ctx.shadowBlur = 0;
+
+      // 枠線
+      ctx.strokeStyle = isKey ? 'rgba(255,210,60,0.9)' : 'rgba(74,144,217,0.45)';
+      ctx.lineWidth   = 1.5;
+      ctx.beginPath(); ctx.roundRect(b.x, b.y, BLOCK_W, BLOCK_H, 5); ctx.stroke();
+
+      // ラベル
+      ctx.textAlign = 'center';
+      if (isKey) {
+        ctx.font = '14px Arial';
+        ctx.fillText('🔑', b.x + BLOCK_W / 2, b.y + BLOCK_H / 2 + 5);
+      } else {
+        ctx.fillStyle = 'rgba(100,150,220,0.6)';
+        ctx.font      = 'bold 11px Arial';
+        ctx.fillText('■', b.x + BLOCK_W / 2, b.y + BLOCK_H / 2 + 4);
+      }
+    }
+  }
+
+  // ── パーティクル ──
+  function renderParticles() {
+    for (const p of particles) {
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.fillStyle   = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * Math.max(0, p.life), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // ── パドル ──
+  function renderPaddle() {
+    ctx.shadowColor = '#74b9ff';
+    ctx.shadowBlur  = 22;
+
+    const grad = ctx.createLinearGradient(paddleX, PADDLE_Y, paddleX, PADDLE_Y + PADDLE_H);
+    grad.addColorStop(0, '#74b9ff');
+    grad.addColorStop(1, '#0984e3');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.roundRect(paddleX, PADDLE_Y, PADDLE_W, PADDLE_H, 7); ctx.fill();
+
+    ctx.shadowBlur = 0;
+
+    // ハイライト
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.beginPath(); ctx.roundRect(paddleX + 7, PADDLE_Y + 2, PADDLE_W - 14, 4, 2); ctx.fill();
+  }
+
+  // ── ボール ──
+  function renderBall() {
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur  = 20;
+    ctx.fillStyle   = '#ffffff';
+    ctx.beginPath(); ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2); ctx.fill();
+
+    // 光沢
+    ctx.shadowBlur  = 0;
+    ctx.fillStyle   = 'rgba(180,220,255,0.55)';
+    ctx.beginPath(); ctx.arc(ball.x - 2.5, ball.y - 2.5, BALL_R * 0.38, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // ════════════════════════════════════════════════
+  //  ユーティリティ
+  // ════════════════════════════════════════════════
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  // ════════════════════════════════════════════════
+  //  ゲームループ
+  // ════════════════════════════════════════════════
+  let lastTs = 0;
+
+  function loop(ts) {
+    const dt = Math.min((ts - lastTs) / 1000, 0.05);
+    lastTs   = ts;
+    update(dt);
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  // 起動
+  updateCharPanel();
+  requestAnimationFrame(ts => { lastTs = ts; requestAnimationFrame(loop); });
+  </script>
+</body>
+</html>
