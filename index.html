@@ -292,6 +292,7 @@
     keysBroken   = 0;
     totalKeys    = cfg.keyCount;
     particles    = [];
+    timeBonuses  = [];
 
     paddleX = targetPX = (W - PADDLE_W) / 2;
     resetBall();
@@ -433,6 +434,8 @@
 
       if (b.type === 'key') {
         keysBroken++;
+        timeLeft += 10;
+        timeBonuses.push({ x: b.x + BLOCK_W / 2, y: b.y + BLOCK_H / 2, life: 1.0 });
         updateCharPanel();
         if (keysBroken >= totalKeys) { doStageClear(); return; }
       }
@@ -447,6 +450,14 @@
       p.vy += 0.18;
       p.life -= dt * 2;
       if (p.life <= 0) particles.splice(i, 1);
+    }
+
+    // タイムボーナステキスト更新
+    for (let i = timeBonuses.length - 1; i >= 0; i--) {
+      const tb = timeBonuses[i];
+      tb.y -= 60 * dt;
+      tb.life -= dt * 0.8;
+      if (tb.life <= 0) timeBonuses.splice(i, 1);
     }
   }
 
@@ -597,6 +608,7 @@
     renderHUD();
     renderBlocks();
     renderParticles();
+    renderTimeBonuses();
     renderPaddle();
     renderBall();
   }
@@ -752,6 +764,21 @@
       ctx.fill();
     }
     ctx.globalAlpha = 1;
+  }
+
+  // ── タイムボーナステキスト ──
+  function renderTimeBonuses() {
+    ctx.textAlign = 'center';
+    ctx.font      = 'bold 20px Arial';
+    for (const tb of timeBonuses) {
+      ctx.globalAlpha  = Math.max(0, tb.life);
+      ctx.fillStyle    = '#2ecc71';
+      ctx.shadowColor  = '#2ecc71';
+      ctx.shadowBlur   = 10;
+      ctx.fillText('+10s', tb.x, tb.y);
+    }
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur  = 0;
   }
 
   // ── パドル ──
